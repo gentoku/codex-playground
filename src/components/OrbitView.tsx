@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { R, norm, prediction, type State, type Vec } from '../physics/orbit';
+import { R, prediction, type State, type Vec } from '../physics/orbit';
 type Props = { state: State; trail: Vec[]; showPrediction: boolean; showTrail: boolean; showVector: boolean; editable: boolean; onVelocity: (speed: number, angle: number) => void };
 export default function OrbitView(p: Props) {
   const canvas = useRef<HTMLCanvasElement>(null);
