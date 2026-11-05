@@ -1,43 +1,56 @@
-import { useEffect, useRef, useState } from 'react';
-import { Orbit, Play, Pause, RotateCcw, ArrowUpRight, Activity, SlidersHorizontal, Info } from 'lucide-react';
-import OrbitView from './components/OrbitView';
-import { DT, R, PRESETS, circularSpeed, elements, initial, norm, step, type Vec } from './physics/orbit';
-const fmt = (n: number | null, digits = 1) => n === null || !Number.isFinite(n) ? '—' : n.toLocaleString('ja-JP', { maximumFractionDigits: digits, minimumFractionDigits: digits });
-function NumberControl({ label, value, min, max, unit, onChange }: { label: string; value: number; min: number; max: number; unit: string; onChange: (v: number) => void }) {
-  return <label className="number-control"><span>{label}<span className="number-box"><input aria-label={label} type="number" min={min} max={max} step="any" value={Number(value.toFixed(3))} onChange={e => { const n = e.target.valueAsNumber; if (Number.isFinite(n)) onChange(Math.max(min, Math.min(max, n))); }}/><small>{unit}</small></span></span><input aria-label={`${label}スライダー`} type="range" min={min} max={max} step={(max - min) / 1000} value={value} onChange={e => onChange(+e.target.value)}/></label>;
-}
+import { lazy, Suspense, useState } from "react";
+import { Orbit, Globe2, Telescope } from "lucide-react";
+import EarthLab from "./EarthLab";
+import "./lab/lab.css";
+const UniverseLab = lazy(() => import("./lab/UniverseLab"));
 export default function App() {
-  const [config, setConfig] = useState({ altitude: 2000, speed: PRESETS[0].speed, angle: 90 });
-  const [state, setState] = useState(() => initial(2000, PRESETS[0].speed, 90));
-  const current = useRef(state), trail = useRef<Vec[]>([state.r]);
-  const [running, setRunning] = useState(false), [rate, setRate] = useState(100), [selected, setSelected] = useState<number | null>(0);
-  const [showPrediction, setPrediction] = useState(true), [showTrail, setTrail] = useState(true), [showVector, setVector] = useState(true);
-  const [dv, setDv] = useState(0.3), [dvAngle, setDvAngle] = useState(90);
-  const accumulator = useRef(0);
-  const reset = (c = config) => { const s = initial(c.altitude, c.speed, c.angle); current.current = s; trail.current = [s.r]; accumulator.current = 0; setState(s); setRunning(false); };
-  const configure = (c: typeof config) => { setConfig(c); reset(c); setSelected(null); };
-  useEffect(() => {
-    let frame: number, previous = performance.now();
-    const tick = (now: number) => {
-      if (running) {
-        accumulator.current += Math.min((now - previous) / 1000, .1) * rate;
-        let s = current.current, count = 0;
-        while (accumulator.current >= DT && count++ < 2000 && !s.collided) { s = step(s); accumulator.current -= DT; if (s.t % 5 === 0 || s.collided) trail.current.push({ ...s.r }); }
-        if (trail.current.length > 16000) trail.current.splice(0, trail.current.length - 16000);
-        current.current = s; setState(s); if (s.collided) { setRunning(false); accumulator.current = 0; }
-      }
-      previous = now; frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick); return () => cancelAnimationFrame(frame);
-  }, [running, rate]);
-  const o = elements(state), editing = state.t === 0 && !running;
-  const status = state.collided ? '地表に衝突' : !o.bound ? '脱出軌道' : o.periapsis < 0 ? '地表と交差する軌道' : o.e < .001 ? '円軌道' : '楕円軌道';
-  const applyDv = () => { const a = dvAngle * Math.PI / 180; const s = { ...current.current, v: { x: current.current.v.x + dv * 1000 * Math.cos(a), y: current.current.v.y + dv * 1000 * Math.sin(a) } }; current.current = s; setState(s); };
-  return <div className="app"><header><div className="brand"><div className="brand-icon"><Orbit size={25}/></div><div>Gravity Lab <small>ORBITAL MECHANICS PLAYGROUND</small></div><span className="phase">PHASE 01</span></div><div className="header-right"><span className="live-dot"/> EARTH ORBIT <span className="divider"/> 地球周回軌道シミュレーター</div></header>
-    <div className="intro"><div><div className="eyebrow">A LITTLE VELOCITY. A WHOLE NEW ORBIT.</div><h1>重力を、実験しよう。</h1><p>ひとつの地球、ひとつの衛星。初速度を変えて、軌道のしくみを探ろう。</p></div><div className="model-tag"><span>⊕</span><div>EARTH<small>固定重力源 · 二体問題</small></div></div></div>
-    <main><section className="simulation"><div className="sim-top"><div><Activity size={15}/> ORBIT SIMULATION</div><span className={`status ${state.collided ? 'danger' : ''}`}><i/> {status}</span></div><OrbitView state={state} trail={trail.current} showPrediction={showPrediction} showTrail={showTrail} showVector={showVector} editable={editing} onVelocity={(speed, angle) => configure({ ...config, speed, angle })}/><div className="transport"><button className="play" disabled={state.collided} onClick={() => setRunning(!running)}>{running ? <Pause size={16}/> : <Play size={16}/>} {running ? '一時停止' : '再生'}</button><button className="reset" onClick={() => reset()}><RotateCcw size={15}/> リセット</button><div className="time"><small>経過時間</small><strong>{fmt(state.t / 60, 1)} <span>min</span></strong></div><label className="rate">時間倍率 <select aria-label="時間倍率" value={rate} onChange={e => setRate(+e.target.value)}>{[1, 10, 100, 500, 1000, 5000].map(v => <option key={v} value={v}>{v} ×</option>)}</select></label></div><div className="legend">{[[showTrail, setTrail, '軌跡', 'mint'], [showPrediction, setPrediction, '予測軌道', 'dash'], [showVector, setVector, '速度ベクトル', 'amber']].map(([v, fn, label, cls]) => <label key={String(label)}><input type="checkbox" checked={v as boolean} onChange={e => (fn as (v: boolean) => void)(e.target.checked)}/><i className={String(cls)}/>{String(label)}</label>)}<span>予測：二体問題の解析解</span></div></section>
-    <aside><section className="panel presets"><div className="section-title"><Orbit size={16}/> 軌道プリセット <small>START HERE</small></div><div className="preset-grid">{PRESETS.map((p, i) => <button key={p.name} className={selected === i ? 'selected' : ''} onClick={() => { setConfig(p); reset(p); setSelected(i); }}><span className={`orbit-symbol orbit-${i}`}>{['◯', '⬭', '↘', '↗'][i]}</span><span>{p.name}<small>{['安定した周回', 'のびる軌道', '地表へ落下', '地球の外へ'][i]}</small></span><span className="preset-dot"/></button>)}</div><p>{selected !== null ? PRESETS[selected].subtitle : 'あなただけの軌道を実験しよう'}</p></section>
-    <section className="panel"><div className="section-title"><SlidersHorizontal size={16}/> 初期条件 <small>INITIAL STATE</small></div><NumberControl label="初期高度" value={config.altitude} min={100} max={30000} unit="km" onChange={altitude => configure({ ...config, altitude })}/><NumberControl label="初速度" value={config.speed} min={0} max={16} unit="km/s" onChange={speed => configure({ ...config, speed })}/><NumberControl label="打ち出し方向" value={config.angle} min={0} max={360} unit="°" onChange={angle => configure({ ...config, angle })}/><div className="input-note">0° = 右向き / 90° = 上向き<br/>初期位置は地球の右側。変更するとリセットされます。</div><button className="outline full" onClick={() => configure({ ...config, speed: circularSpeed(R + config.altitude * 1000) / 1000, angle: 90 })}>この高度の円軌道速度に設定 <ArrowUpRight size={14}/></button></section>
-    <section className="panel maneuver"><div className="section-title"><ArrowUpRight size={16}/> 軌道マニューバ <small>Δv</small></div><div className="dv-fields"><label>速度変更量 <span><input aria-label="Δv" type="number" min="0" max="16" step="0.1" value={dv} onChange={e => setDv(Math.max(0, Math.min(16, +e.target.value)))}/> km/s</span></label><label>方向 <span><input aria-label="Δv方向" type="number" min="0" max="360" value={dvAngle} onChange={e => setDvAngle(Math.max(0, Math.min(360, +e.target.value)))}/> °</span></label></div><button className="outline full" disabled={state.collided} onClick={applyDv}>＋ Δv を加える</button><p>地球固定座標の方向へ、瞬間的に加速します。</p></section></aside>
-    <section className="telemetry"><div className="section-title"><Activity size={16}/> 軌道テレメトリ <small>LIVE DATA</small></div><div className="metrics">{[['現在高度', fmt(Math.max(0, (norm(state.r) - R) / 1000)), 'km'], ['現在速度', fmt(o.speed / 1000, 3), 'km/s'], ['近地点高度', fmt(o.periapsis / 1000), 'km'], ['遠地点高度', fmt(o.apoapsis === null ? null : o.apoapsis / 1000), 'km'], ['離心率', fmt(o.e, 4), ''], ['軌道周期', fmt(o.period === null ? null : o.period / 60), 'min']].map(([label, value, unit]) => <div className="metric" key={label}><span>{label}</span><strong>{value} <small>{unit}</small></strong></div>)}</div><div className="telemetry-note">位置 ({fmt(state.r.x / 1000)}, {fmt(state.r.y / 1000)}) km <span>·</span> 比軌道エネルギー {fmt(o.energy / 1e6, 3)} MJ/kg <span>·</span> {state.collided ? '衝突後の軌道要素は接触直前の速度に基づく参考値' : '—：非束縛軌道では遠地点・周期は定義されません。負の近地点高度は地表との交差を示します。'}</div></section></main><footer><span><Info size={14}/> 物理モデル：固定・球対称の地球 / 質量を無視できる衛星 / ニュートン重力</span><span>大気抵抗・自転・扁平率・月の重力は含みません。</span><a href="https://earth-info.nga.mil/index.php?dir=wgs84&action=wgs84" target="_blank" rel="noreferrer">WGS 84 定数 ↗</a></footer></div>;
+  const [workspace, setWorkspace] = useState<"universe" | "earth">("universe");
+  return (
+    <>
+      <nav className="workspace-nav" aria-label="実験室の切り替え">
+        <a
+          className="workspace-brand"
+          href="#"
+          onClick={(e) => e.preventDefault()}
+        >
+          <span>
+            <Orbit size={24} />
+          </span>
+          <div>
+            Gravity Lab<small>THE INTERACTIVE GRAVITY EXPLORER</small>
+          </div>
+        </a>
+        <div className="workspace-tabs">
+          <button
+            aria-pressed={workspace === "universe"}
+            className={workspace === "universe" ? "active" : ""}
+            onClick={() => setWorkspace("universe")}
+          >
+            <Telescope size={16} /> 宇宙探索室 <small>N-BODY / 3D</small>
+          </button>
+          <button
+            aria-pressed={workspace === "earth"}
+            className={workspace === "earth" ? "active" : ""}
+            onClick={() => setWorkspace("earth")}
+          >
+            <Globe2 size={16} /> 地球周回ラボ <small>CLASSIC / 2D</small>
+          </button>
+        </div>
+        <span className="workspace-edition">
+          EXPLORER EDITION <i />
+        </span>
+      </nav>
+      {workspace === "universe" ? (
+        <Suspense
+          fallback={
+            <div className="lab-loading">宇宙探索室を準備しています…</div>
+          }
+        >
+          <UniverseLab />
+        </Suspense>
+      ) : (
+        <EarthLab />
+      )}
+    </>
+  );
 }
