@@ -13,6 +13,14 @@ npm run dev
 
 ブラウザで http://localhost:5173 を開きます。本番用は `npm run build`、成果物の確認は `npm run preview`（http://localhost:4173）。`dist/` を静的ホスティングへ配置できます。
 
+## GitHub Pagesで公開
+
+公開URLは https://gentoku.github.io/codex-playground/ です。Viteのベースパスは `/codex-playground/` に設定しています。ローカルでも開発時は http://localhost:5173/codex-playground/ 、本番ビルドのプレビューは http://localhost:4173/codex-playground/ を開いてください。
+
+GitHubの **Settings → Pages → Build and deployment → Source** を **GitHub Actions** に設定した状態で、`main` に変更を統合すると `.github/workflows/pages.yml` が実行されます。Node.js 22で `npm ci` → `npm test` → `npm run build` を実行し、成功した `dist/` をPages用アーティファクトとしてアップロードして公開します。デプロイ権限はデプロイジョブに限定しています。既存の `.github/workflows/ci.yml` によるpush・PRの検証も維持しています。
+
+手動で再公開する場合は **Actions → Deploy Gravity Lab to GitHub Pages → Run workflow** で `main` を選択します。デプロイは `main` のみ許可しています。実行結果と公開URLはワークフローの `deploy` ジョブで確認できます。PRブランチのpushでは公開されず、PRを `main` にマージすると公開処理が始まります。
+
 ## 操作
 
 - 円・楕円・衝突・脱出のプリセットを選び、再生します。
